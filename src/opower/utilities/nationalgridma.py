@@ -16,3 +16,8 @@ class NationalGridMA(NationalGrid, UtilityBase):
     def subdomain() -> str:
         """Return the opower.com subdomain for this utility."""
         return "ngma"
+
+    @staticmethod
+    def supports_realtime_usage() -> bool:
+        """Check if Utility supports realtime usage reads."""
+        return True
