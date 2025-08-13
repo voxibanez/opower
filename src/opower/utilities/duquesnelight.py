@@ -2,6 +2,7 @@
 
 import re
 from html.parser import HTMLParser
+from typing import Any
 
 import aiohttp
 
@@ -62,10 +63,12 @@ class DuquesneLight(UtilityBase):
         session: aiohttp.ClientSession,
         username: str,
         password: str,
+        login_data: dict[str, Any],
     ) -> str:
         """Login to the utility website."""
         # Double-logins are somewhat broken if cookies stay around.
-        session.cookie_jar.clear(lambda cookie: cookie["domain"] == "www.duquesnelight.com")
+        # Some use auth.duquesnelight.com and others use duquesnelight.com (session token)
+        session.cookie_jar.clear(lambda cookie: "duquesnelight.com" in cookie["domain"])
         # DQE uses Incapsula and merely passing the User-Agent is not enough.
         headers = {
             "User-Agent": USER_AGENT,
@@ -82,27 +85,20 @@ class DuquesneLight(UtilityBase):
         }
 
         async with session.post(
-            "https://www.duquesnelight.com/login/login",
+            "https://auth.duquesnelight.com/oauth/authorize/login",
             data={
-                "Phone": "",
-                "Email": "",
-                "IsLoginOff": "false",
-                "RedFlagPassword": "",
-                "RememberUsername": "false",
-                "Username": username,
-                "Password": password,
-                "RedirectUrl": "/my-account/account-summary",
-                "SuppressPleaseLoginMessage": "true",
-                "LoginTurnedOffMessage": "",
-                "RedirectPath": "",
-                "PersonId": "",
+                "grant_type": "password",
+                "remember_username": True,
+                "username": username,
+                "password": password,
             },
             headers=headers,
-            raise_for_status=True,
+            raise_for_status=False,
         ) as resp:
-            # Check for failed login - DQE returns status 200 with a json body that can be parsed.
-            if "invalid" in await resp.text():
-                raise InvalidAuth("Login failed")
+            if resp.status == 400:
+                raise InvalidAuth(await resp.text())
+            if resp.status != 200:
+                resp.raise_for_status()
 
         usage_parser = DQEUsageParser()
 
